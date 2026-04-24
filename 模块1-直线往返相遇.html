@@ -921,8 +921,12 @@
       ctx.lineWidth = 2;
       ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
-      // 方框内文字（直接使用固定标签）
-      const labels = ['1s', '3s', '5s', '7s'];
+      // 方框内文字（根据出发模式使用不同标签）
+      // 两端出发: 1s, 3s, 5s, 7s ((2n-1)S)
+      // 同端出发: 2s, 4s, 6s, 8s (2nS)
+      const labels = (state.config.startMode === 'two-ends')
+        ? ['1s', '3s', '5s', '7s']
+        : ['2s', '4s', '6s', '8s'];
       ctx.fillStyle = '#C28B5D';
       ctx.font = 'bold 36px -apple-system, sans-serif';  // 调整为36px（2倍）
       ctx.textAlign = 'center';
