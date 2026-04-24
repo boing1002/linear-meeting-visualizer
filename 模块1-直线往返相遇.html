@@ -53,13 +53,13 @@
     .container {
       max-width: 1800px;
       margin: 0 auto;
-      padding: 24px;
+      padding: 12px;  /* 从24px减小到12px */
     }
 
     /* 头部 */
     .header {
       text-align: center;
-      padding: 32px 0 24px;
+      padding: 16px 0 12px;  /* 从32px 0 24px减小到16px 0 12px */
       border-bottom: 1px solid var(--border-light);
       margin-bottom: 24px;
     }
@@ -69,12 +69,7 @@
       font-size: 32px;
       font-weight: 700;
       color: var(--text-primary);
-      margin-bottom: 8px;
-    }
-
-    .header p {
-      font-size: 15px;
-      color: var(--text-secondary);
+      margin-bottom: 0;  /* 从8px改为0，因为不再有副标题 */
     }
 
     /* 控制栏 */
@@ -316,7 +311,6 @@
     <!-- 头部 -->
     <div class="header">
       <h1>模块1:直线往返相遇问题</h1>
-      <p>Linear Round-Trip Meeting Problem • 验证(2n-1)S和2nS公式</p>
     </div>
 
     <!-- 控制栏 -->
@@ -419,6 +413,7 @@
     const state = {
       isPlaying: false,
       isPaused: false,
+      isPausedByMeeting: false,  // ✅ 是否由相遇导致的暂停
       time: 0,  // 秒
       lastTime: 0,
       animationId: null,
@@ -464,7 +459,7 @@
         baseY: 100,
         intervalHeight: 150,  // 每个区间高度（阶梯式）
         trackAOffset: 30,  // 甲轨道偏移
-        trackBOffset: 90   // 乙轨道偏移
+        trackBOffset: 90   // 乙轨道偏移（默认60px间距）
       }
     };
 
@@ -485,7 +480,7 @@
       // 阶梯式布局：最多4个区间，每个150px + 间隙100px + 实时动画150px + 底部padding
       // 总高度约：150 + 100 + 4*150 + 100 = 950px
       canvas.width = 1600;
-      canvas.height = 950;  // 调整高度，适配4个快照
+      canvas.height = 950;
     }
 
     function bindEvents() {
@@ -525,6 +520,7 @@
       stopAnimation();
 
       state.isPaused = false;
+      state.isPausedByMeeting = false;  // ✅ 清除相遇暂停标志
       state.time = 0;
       state.lastMeetingTime = 0;
       state.intervals = [];
@@ -570,14 +566,19 @@
 
     function togglePlayPause() {
       if (state.isPlaying && !state.isPaused) {
+        // 正在播放，点击 → 暂停
         state.isPaused = true;
       } else if (state.isPlaying && state.isPaused) {
+        // 已暂停（可能是相遇暂停或手动暂停），点击 → 恢复播放
         state.isPaused = false;
+        state.isPausedByMeeting = false;  // ✅ 清除相遇暂停标志
         state.lastTime = performance.now();
         state.animationId = requestAnimationFrame(animate);
       } else {
+        // 未开始，点击 → 开始播放
         state.isPlaying = true;
         state.isPaused = false;
+        state.isPausedByMeeting = false;  // ✅ 清除相遇暂停标志
         state.lastTime = performance.now();
         startAnimation();
       }
@@ -760,17 +761,15 @@
       // 记录相遇时间
       state.lastMeetingTime = state.time;
 
-      // ✅ 不再显示验证框，直接开始下一次
-      // showVerificationBox(n, state.currentInterval);
-
-      // ✅ 不暂停，继续动画
-      // state.isPaused = true;
-      // updatePlayPauseButton();
-
       // 自动开始下一个区间
       if (n < 4) {
         startNewInterval();
       }
+
+      // ✅ 相遇后自动暂停，方便老师讲解
+      state.isPausedByMeeting = true;
+      state.isPaused = true;
+      updatePlayPauseButton();
     }
 
     function continueToNextInterval() {
@@ -822,7 +821,7 @@
 
       // 绘制标题（和数据面板"实时数据"样式一致）
       ctx.fillStyle = '#787774';  // var(--text-secondary)
-      ctx.font = '600 18px -apple-system, sans-serif';  // 统一为18px
+      ctx.font = '600 36px -apple-system, sans-serif';  // 调整为36px（2倍）
       ctx.textAlign = 'left';
       ctx.fillText(`实时动画 - 第${interval.n}次相遇进行中`, startX, intervalY - 40);
 
@@ -851,17 +850,32 @@
     function drawHistorySnapshot(ctx, interval, index) {
       const { startX, endX, baseY, trackAOffset, trackBOffset } = state.layout;
       const snapshotStartY = baseY + 100;  // 从实时动画下方100px开始（缩小50%）
-      const snapshotY = snapshotStartY + index * 150;  // 每个快照间隔150px
+
+      // ✅ 第4次快照（index=3）与第3次之间增加20%间距（1.2倍）
+      // 正常间距150px，增加20%后为180px
+      let snapshotY;
+      if (index === 3) {
+        // 第4次：第3次位置(400px) + 增大间距(180px) = 580px
+        snapshotY = snapshotStartY + 2 * 150 + 180;
+      } else {
+        // 其他快照：正常150px间距
+        snapshotY = snapshotStartY + index * 150;
+      }
 
       // 甲乙轨迹微小位移避免重叠
       const trackAY = snapshotY + trackAOffset;  // 甲轨迹基准线
-      // ✅ 第四次快照115px，其他90px
-      const adjustedTrackBOffset = (index === 3) ? 115 : trackBOffset;
+      // ✅ 根据快照次数动态调整乙轨道间距
+      // 第1、2次：60px间距（90-30）
+      // 第3次：90px间距（120-30）
+      // 第4次：105px间距（135-30）
+      let adjustedTrackBOffset = trackBOffset;
+      if (index === 2) adjustedTrackBOffset = 120;  // 第3次
+      else if (index === 3) adjustedTrackBOffset = 135;  // 第4次
       const trackBY = snapshotY + adjustedTrackBOffset;  // 乙轨迹基准线（下方）
 
       // 绘制标题（和数据面板"实时数据"样式一致）
       ctx.fillStyle = '#787774';  // var(--text-secondary)
-      ctx.font = '600 18px -apple-system, sans-serif';  // 增大到18px
+      ctx.font = '600 36px -apple-system, sans-serif';  // 调整为36px（2倍）
       ctx.textAlign = 'left';
       ctx.fillText(`第${interval.n}次相遇快照`, startX, snapshotY + trackAOffset - 15);
 
@@ -908,9 +922,9 @@
       ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
       // 方框内文字（直接使用固定标签）
-      const labels = ['1s', '2s', '5s', '7s'];
+      const labels = ['1s', '3s', '5s', '7s'];
       ctx.fillStyle = '#C28B5D';
-      ctx.font = 'bold 18px -apple-system, sans-serif';
+      ctx.font = 'bold 36px -apple-system, sans-serif';  // 调整为36px（2倍）
       ctx.textAlign = 'center';
       ctx.fillText(labels[interval.n - 1], boxX + boxWidth / 2, boxY + 26);
 
